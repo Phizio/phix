@@ -5,5 +5,12 @@
     "keywords": ["framework", "phix"],
     "homepage": "http://ideasyte.ru/",
     "author": "Roman Ivantsoff",
-    "license": ["MIT"]
+    "require": {
+        "twbs/bootstrap": "^3.3",
+        "components/jquery": "^2.1",
+        "components/font-awesome": "^4.4",
+        "datatables/datatables": "^1.10",
+        "tubalmartin/cssmin":"^2.4",
+        "matthiasmullie/minify":"^1.3"
+    }
 }
