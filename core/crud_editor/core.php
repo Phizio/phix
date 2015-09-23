@@ -25,7 +25,7 @@ function add_error ($field_name, $error_type) {
 }
 
 // Генерация SQL-запроса на создание таблицы (при этом дальнейшее выполнение завершается)
-if ($data_in['act'] == 'sql' && $app['mode'] == 'debug') require MC_ROOT . '/scripts/crud_editor/sql_generator.php';
+if ($data_in['act'] == 'sql' && $app['mode'] == 'debug') require(PHIX_CORE . '/crud_editor/sql_generator.php');
 
 
 // Действия
