@@ -1,5 +1,17 @@
 # phix
-light-weight simple framework without MVC
-
-This project use a Composer: "Vendor" folder is not exists in this repository.
-You need to run "composer init" & "composer update" in project's directory to install all additional plugins.
+## Installation
+light-weight simple framework without MVC - only core
+## Sample of use
+See an example in repo: phizio/phix_example
+## Composer
+Example of Composer.json in your project
+```
+{
+    "require": {
+        "phizio/phix": "^1.0",
+        /*
+        ... your own plugins
+        */
+    }
+}
+```
