@@ -41,4 +41,9 @@ if (isset($_GET)) foreach ($_GET as $k => $v) {
         $_GET[$k][$k2] = mysql_real_escape_string( htmlspecialchars( trim( $v2 ) ) );
     } else $_GET[$k] = mysql_real_escape_string( htmlspecialchars( trim( $v ) ) );
 }
+if (isset($_COOKIE)) foreach ($_COOKIE as $k => $v) {
+    if ( is_array($v) ) foreach ($v as $k2 => $v2) {
+        $_COOKIE[$k][$k2] = mysql_real_escape_string( htmlspecialchars( trim( $v2 ) ) );
+    } else $_COOKIE[$k] = mysql_real_escape_string( htmlspecialchars( trim( $v ) ) );
+}
 

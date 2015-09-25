@@ -7,7 +7,7 @@
 // Если передан не массив, а единственная переменная, то она доступна как $v, так и как $content
 // Формат файла - строго .php (окончание '.php' при вызове функции можно опустить)
 function execute($widget_path, $v = false) {
-    global $page, $app, $self;
+    global $page, $app, $user, $self;
     $type = substr($widget_path, (strlen($widget_path) - 4), 4);
     if ($type != '.php') $widget_path = trim($widget_path) . '.php';
     if (! is_array($v)) $content = $v;
@@ -21,7 +21,7 @@ function execute($widget_path, $v = false) {
 // т.е. если в переданном массиве $array['foo'] = '123', то [[foo]] при рендеринге будет заменено на 123.
 // Формат (расширение) файла может быть любой - js, html и пр.
 function render($file_path, $v = []) {
-    global $page, $app, $self;
+    global $page, $app, $user, $self;
     if (strpos($file_path, '.') === false) $file_path = trim($file_path) . '.php';
     $file_content = file_get_contents(MC_ROOT . '/templates/' . $file_path);
     // Обработка вставок вида [[name]]
@@ -40,7 +40,7 @@ function dd($variable) {
 
 // Подключение дополнительного ресурса с проверкой на дублирование
 function resource($path, $type = false) {
-    global $page;
+    global $page, $app, $user, $self;
     if (!is_array($path)) $paths = [$path];
     else $paths = $path;
     foreach ($paths as $path) {
