@@ -72,8 +72,13 @@ function css_resources() {
         foreach ($page['css'] as $css) {
             if (substr($css, 0, 4) == 'http') $r .= "<link rel=\"stylesheet\" href=\"$css\">\r\n";
             else {
-                $css_path1 = "/assets/css/" . $css;
-                $css_path2 = "/vendor/" . $css;
+                if (substr($css, 0, 1) == '/') {
+                    $css_path1 = $css;
+                    $css_path2 = "/assets" . $css;
+                } else {
+                    $css_path1 = "/assets/css/" . $css;
+                    $css_path2 = "/vendor/" . $css;
+                }
                 if (file_exists( MC_ROOT . $css_path1 ))
                 {                    
                     if($app['mode']=='debug') $r .= "<link rel=\"stylesheet\" href=\"$css_path1\">\r\n";
@@ -124,8 +129,13 @@ function js_resources() {
         foreach ($page['js'] as $script) {
             if (substr($script, 0, 4) == 'http') $r .= "<script src=\"$script\"></script>\r\n";
             else {
-                $script_path1 = "/assets/js/" . $script;
-                $script_path2 = "/vendor/" . $script;
+                if (substr($script, 0, 1) == '/') {
+                    $script_path1 = $script;
+                    $script_path2 = "/assets" . $script;
+                } else {
+                    $script_path1 = "/assets/js/" . $script;
+                    $script_path2 = "/vendor/" . $script;
+                }
                 if (file_exists(MC_ROOT . $script_path1))
                 {
                     if($app['mode']=='debug') $r .= "<script src=\"$script_path1\"></script>\r\n";
