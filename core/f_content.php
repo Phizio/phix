@@ -6,11 +6,11 @@
 // Переданный массив данных доступен внутри виджета как массив $v
 // Если передан не массив, а единственная переменная, то она доступна как $v, так и как $content
 // Формат файла - строго .php (окончание '.php' при вызове функции можно опустить)
-function execute($widget_path, $v = false) {
+function execute($widget_path, $content = false) {
     global $page, $app, $user, $self;
     $type = substr($widget_path, (strlen($widget_path) - 4), 4);
     if ($type != '.php') $widget_path = trim($widget_path) . '.php';
-    if (! is_array($v)) $content = $v;
+    if (is_array($content)) extract($content);
     $full_path = MC_ROOT . '/templates/' . $widget_path;
     if ($app['mode'] == 'debug') require $full_path;
     else @require $full_path;
@@ -80,18 +80,18 @@ function css_resources() {
                     $css_path2 = "/vendor/" . $css;
                 }
                 if (file_exists( MC_ROOT . $css_path1 ))
-                {                    
+                {
                     if($app['mode']=='debug') $r .= "<link rel=\"stylesheet\" href=\"$css_path1\">\r\n";
-                    else 
+                    else
                     {
                         $all_css['files'][]=$css_path1;
                         $all_css['names'][]=$css;
                     }
                 }
-                else if (file_exists( MC_ROOT . $css_path2 )) 
+                else if (file_exists( MC_ROOT . $css_path2 ))
                 {
                     if($app['mode']=='debug') $r .= "<link rel=\"stylesheet\" href=\"$css_path2\">\r\n";
-                    else 
+                    else
                     {
                         $all_css['files'][]=$css_path2;
                         $all_css['names'][]=$css;
@@ -103,7 +103,7 @@ function css_resources() {
     // Подключение индивидуального стиля с именем, равным имени страницы, если такой существует
     $self_css=substr($self, 0, strlen($self) - 4).".css";
     $css_path = "/assets/css/" . $self_css ;
-    if (file_exists( MC_ROOT . $css_path )) 
+    if (file_exists( MC_ROOT . $css_path ))
     {
         if($app['mode']=='debug') {
             $r .= '<link rel="stylesheet" href="' . $css_path . '">';
@@ -114,9 +114,9 @@ function css_resources() {
         }
     }
 
-   if($app['mode']=='debug') return $r;
-   
-   return '<link rel="stylesheet" href="'.minification($all_css,'css').'">';
+    if($app['mode']=='debug') return $r;
+
+    return '<link rel="stylesheet" href="'.minification($all_css,'css').'">';
 }
 
 // Вывод списка подключаемых JS
@@ -139,16 +139,16 @@ function js_resources() {
                 if (file_exists(MC_ROOT . $script_path1))
                 {
                     if($app['mode']=='debug') $r .= "<script src=\"$script_path1\"></script>\r\n";
-                    else 
+                    else
                     {
                         $all_js['files'][]=$script_path1;
                         $all_js['names'][]=$script;
                     }
                 }
-                else if (file_exists(MC_ROOT . $script_path2)) 
+                else if (file_exists(MC_ROOT . $script_path2))
                 {
                     if($app['mode']=='debug') $r .= "<script src=\"$script_path2\"></script>\r\n";
-                    else 
+                    else
                     {
                         $all_js['files'][]=$script_path2;
                         $all_js['names'][]=$script;
@@ -160,7 +160,7 @@ function js_resources() {
     // Подключение индивидуального скрипта с именем, равным имени страницы, если такой существует
     $self_js = substr($self, 0, strlen($self) - 4) . ".js";
     $script_path = "/assets/js/" . $self_js;
-    if (file_exists( MC_ROOT . $script_path )) 
+    if (file_exists( MC_ROOT . $script_path ))
     {
         if($app['mode']=='debug') {
             $r .= "<script src=\"$script_path\"></script>\r\n";
@@ -177,42 +177,42 @@ function js_resources() {
         $r .= "</script>\r\n";
     }
 
-   if($app['mode']=='debug') return $r;
-   
-   return '<script type="text/javascript" src="'.minification($all_js,'js').'"></script>';
+    if($app['mode']=='debug') return $r;
+
+    return '<script type="text/javascript" src="'.minification($all_js,'js').'"></script>';
 }
 
 //self-made minification for both jss & css (with combine.php plugin)
 function minification($array,$type)
 {
-   global $app;
+    global $app;
     $new_name=implode('',$array['names']);
-   $minify_new_name=date('Ymd_Hms').'_'.md5($new_name).'.'.$type;
+    $minify_new_name=date('Ymd_Hms').'_'.md5($new_name).'.'.$type;
 
     $filename=MC_ROOT.'/tmp/cache_table';
     if($app['os_windows']) $filename=  str_replace ('/','\\',$filename);
     $handle = fopen($filename,'c+b');
     if(filesize($filename)>0)
-    {        
+    {
         $contents = fread($handle, filesize($filename));
         $cache_table = unserialize($contents);
         if(array_key_exists ( $new_name , $cache_table ) !== false)
         {
             $minify_new_name = $cache_table[$new_name];
         }
-        else {        
-            $cache_table[$new_name] = $minify_new_name; 
+        else {
+            $cache_table[$new_name] = $minify_new_name;
             ftruncate($handle, 0);
             rewind($handle);
-            fwrite($handle, serialize($cache_table));            
-        }        
+            fwrite($handle, serialize($cache_table));
+        }
     }
-    else {        
+    else {
         fwrite($handle, serialize(array($new_name=>$minify_new_name)));
     }
     fclose($handle);
-    
+
     if($type=='js') $type='javascript';
-    
+
     return combine($array,$minify_new_name,$type);
 }
