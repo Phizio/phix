@@ -70,6 +70,7 @@ class Entity
         $this->_setTypes();
     }
 
+    //указываем типы данных для фильтрации
     protected function _setTypes()
     {
         $this->_types['id'] = 'int';
@@ -79,62 +80,91 @@ class Entity
         $this->_types['deleted_at'] = 'timestamp';
     }
 
+    //загрузить запись в объект;
+    //по умолчанию грузятся только не удаленные записи
+    //если надо удаленные, то $all=true
     public function get($id, $all = false)
     {
-        $result = db_row("SELECT * FROM `'.$this->_table.'` WHERE `id`=" . esc::sql($id, 'int') .
+        $result = db_row("SELECT * FROM `$this->_table` WHERE `id`=" . esc::sql($id, 'int') .
             (!$all ? (" and `deleted_at`='0000-00-00 00:00:00'") : ''));
-        if ($result) {
-            $this->setFieldsFromArray($result);
-            return true;
-        }
+        if ($result)
+            return $this->setFieldsFromArray($result);
         return false;
     }
 
+    //сохраняем запись в бд, если записи с id нет, создаётся, иначе редактируется
+    //$types - типы данных для фильтрации
     public function save($types = null)
     {
-        if (!$types)
+        if (is_array($types)) {
+            foreach ($this->types as $field => $type)
+                if (!isset($types[$field]))
+                    $types[$field] = $type;
+        } else
             $types = $this->_types;
         $values = $this->__toArray();
         $values['id'] = abs(intval($values['id']));
         $data = [];
         $create = true;
         if ($values['id'] > 0) {
-            if (db_result("SELECT COUNT(*) FROM `" . $this->_table . "` WHERE `id`=" . Esc::sql($values['id'], 'int')) > 0)
+            if (db_result("SELECT COUNT(*) FROM ` $this->_table` WHERE `id`=" . Esc::sql($values['id'], 'int')) > 0)
                 $create = false;
         }
-
         if ($create) {
             if ($values['id'] > 0)
                 $data[] = "`id`=" . Esc::sql($values['id'], 'int');
-            if ($data['created_at'] == '0000-00-00 00:00:00')
-                $data['created_at'] = date('Y:m:d H:i:s');
+            if ($values['created_at'] == '0000-00-00 00:00:00')
+                $values['created_at'] = date('Y:m:d H:i:s');
         } else {
-            if ($data['updated_at'] == '0000-00-00 00:00:00')
-                $data['updated_at'] = date('Y:m:d H:i:s');
+            if ($values['updated_at'] == '0000-00-00 00:00:00')
+                $values['updated_at'] = date('Y:m:d H:i:s');
         }
         foreach ($values as $k => $v)
             if ($k != 'id')
                 $data[] = "`$k` = '" . Esc::sql($v, (isset($types[$k]) ? $types[$k] : null)) . "'";
         if ($create) {
-            $result = db_insert("INSERT INTO `" . $this->_table . "` SET " . implode(', ', $data));
+            $result = db_insert("INSERT INTO `$this->_table` SET " . implode(', ', $data));
             if (!$result)
                 return false;
         } else {
-            $result = db_request("UPDATEO `" . $this->_table . "` SET " . implode(', ', $data) . " WHERE `id`=" . Esc::sql($values['id'], 'int'));
+            $result = db_request("UPDATE `$this->_table` SET " . implode(', ', $data) . " WHERE `id`=" . Esc::sql($values['id'], 'int'));
             if (!$result)
                 return false;
-            $result=$values['id'];
+            $result = $values['id'];
         }
-        $this->get($result);
-        return true;
+        return $this->get($result);
     }
 
+    //"мягко" удаляем запись
+    public function remove()
+    {
+        if ($this->deleted_at=='0000-00-00 00:00:00')
+        {
+            $this->deleted_at=date('Y-m-d H:i:s');
+            $this->save();
+        }
+        return $this;
+    }
+
+    //восстанавливаем запись
+    public function restore()
+    {
+        if ($this->deleted_at!='0000-00-00 00:00:00')
+        {
+            $this->deleted_at='0000-00-00 00:00:00';
+            $this->save();
+        }
+        return $this;
+    }
+
+    //заполняем объект из массива
     public function setFieldsFromArray($data)
     {
         $fields = $this->__toArray();
         foreach ($fields as $k => $v)
             if (isset($data[$k]))
                 $this->$k = $data[$k];
+        return $this;
     }
 
     public function __toArray()
@@ -163,6 +193,7 @@ class Entity
         return json_encode($this->__toArray());
     }
 
+    //определяем свойства класса, являющиеся полями сущности
     protected function _setFields($field = null)
     {
         if (!$this->_fields) {
@@ -205,8 +236,17 @@ class File extends Entity
             $this->get($id);
     }
 
+
     public function save()
     {
+        $this->path((string) $this->path);
+        if (!strlen($this->path))
+            throw new Exception('Path is emppty.');
+        if (!file_exists($this->_root.'/'.$this->path))
+            throw new Exception('File "'.$this->path.'" not found.');
+        if (!is_file($this->_root.'/'.$this->path))
+            throw new Exception('Path "'.$this->path.'" is not file.');
+
         return parent::save();
     }
 
@@ -221,6 +261,13 @@ class File extends Entity
         $this->_types['size'] = 'int';
         $this->_types['data'] = 'json';
 
+    }
+
+    public function path($path) {
+        $path=preg_replace('/\.{1,}/','.',$path);
+        $path=preg_replace('/\\{1,}/','/',$path);
+        $path=preg_replace('/\\{1,}/','\\',$path);
+        return $path;
     }
 }
 
