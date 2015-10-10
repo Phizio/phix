@@ -69,6 +69,7 @@ class Entity
     public function __construct()
     {
         $this->_setTypes();
+        $this->_setFields();
     }
 
     //указываем типы данных для фильтрации
@@ -427,7 +428,7 @@ class RepositoryFile extends Entity
     }
 
     //прикрепляем файл
-    public function setFile($file)
+    public function setFile($file=0)
     {
         if (!is_object($file)) {
             $file = intval($file);
@@ -459,7 +460,7 @@ class RepositoryFile extends Entity
     }
 
     //прикрепляем Репозиторий
-    public function setRepository($repository)
+    public function setRepository($repository=0)
     {
         if (!is_object($repository)) {
             $repository = intval($repository);
@@ -538,7 +539,7 @@ class Repository extends Entity
         $_errors = [],
         $_last_id;
     protected
-        $_table = 'storage',
+        $_table = 'repositories',
         $_list;
     public
         $target = '',
@@ -554,10 +555,21 @@ class Repository extends Entity
             $this->get($id);
     }
 
-    public function get($id, $all = false)
+    //greed - "жадность", вместе с репозиторием сразу грузим имеющиеся версии
+    public function get($id, $all = false, $greed = false)
     {
         parent::get($id, $all);
-        $this->_last_id = $this->id;
+
+        $result=parent::get($id, $all);
+        if ($result) {
+            $this->_last_id = $this->id;
+            if ($greed)
+                $this->getFiles(true);
+            else
+                $this->_list=null;
+        }
+        return $result;
+
     }
 
     protected function _setTypes()
