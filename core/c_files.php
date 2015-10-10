@@ -34,7 +34,7 @@ class Esc
         elseif ($type == 'bool')
             $value = (int)!!$value;
         elseif ($type == 'array')
-            $value = json_encode(is_array($value)?$value:[$value]);
+            $value = json_encode(is_array($value) ? $value : [$value]);
         elseif ($type == 'timestamp') {
             if (preg_match('/^\d+$/s', $value))
                 $value = date('Y-m-d H:i:s');
@@ -51,7 +51,7 @@ class Esc
     }
 }
 
-//стандартные свойства и методы сущности
+//сущность
 class Entity
 {
     private
@@ -61,6 +61,7 @@ class Entity
         $_types = [];
     public
         $id = 0,
+        $user_id = 0,
         $created_at = '0000-00-00 00:00:00',
         $updated_at = '0000-00-00 00:00:00',
         $deleted_at = '0000-00-00 00:00:00';
@@ -171,11 +172,10 @@ class Entity
             if (isset($data[$k])) {
                 switch ($this->_types[$k]) {
                     case 'array':
-                        if (!is_array($data[$k]))
-                        {
-                            if (!$tmp=@json_decode($data[$k]))
-                                $tmp=[$tmp];
-                            $data[$k]=is_array($tmp)?$tmp:[$tmp];
+                        if (!is_array($data[$k])) {
+                            if (!$tmp = @json_decode($data[$k]))
+                                $tmp = [$tmp];
+                            $data[$k] = is_array($tmp) ? $tmp : [$tmp];
                         }
                         break;
                 }
@@ -228,7 +228,7 @@ class Entity
 
 }
 
-//класс для файла
+//файл
 class File extends Entity
 {
     private
@@ -237,8 +237,7 @@ class File extends Entity
     protected
         $_table = 'files';
     public
-        $user_id = 0,
-        $reason = '',
+        $target = '',
         $type = '',
         $name = '',
         $description = '',
@@ -257,7 +256,7 @@ class File extends Entity
     protected function _setTypes()
     {
         parent::_setTypes();
-        $this->_types['reason'] = 'string';
+        $this->_types['target'] = 'string';
         $this->_types['type'] = 'string';
         $this->_types['name'] = 'string';
         $this->_types['description'] = 'string';
@@ -368,8 +367,218 @@ class File extends Entity
 
 }
 
-class Files
+
+//Версия файла
+class RepositoryFile extends Entity
 {
+    private
+        $_root,
+        $_errors = [];
+    protected
+        $_table = 'storage_files',
+        $_file = null,
+        $_repository;
+    public
+        $repository_id = 0,
+        $file_id = 0;
+
+    public function __construct($root, $id = 0)
+    {
+        parent::__construct();
+        $this->_root = $root;
+        if ($id > 0)
+            $this->get($id);
+    }
+
+    protected function _setTypes()
+    {
+        parent::_setTypes();
+        $this->_types['repository_id'] = 0;
+        $this->_types['file_id'] = 0;
+    }
+
+    //greed - "жадность", вместе с версией сразу грузим прикреплённый файл
+    public function get($id, $all = false, $greed = false)
+    {
+        $result = parent::get($id, $all);
+        if ($result && $greed)
+            $this->setFile(0);
+        return $result;
+    }
+
+    public function getFile()
+    {
+        if ($this->file_id > 0) {
+            if (!$this->_file || $this->file_id != $this->_file['id'])
+                $this->_file = new File($this->file_id);
+            return $this->_file;
+        }
+        return null;
+    }
+
+    public function getRepository()
+    {
+        if ($this->repository_id > 0) {
+            if (!$this->_repository || $this->repository_id != $this->_repository['id'])
+                $this->_repository = new Repository($this->repository_id);
+            return $this->_repository;
+        }
+        return null;
+    }
+
+    //прикрепляем файл
+    public function setFile($file)
+    {
+        if (!is_object($file)) {
+            $file = intval($file);
+            if ($file > 0) {
+                if ($file==$this->file_id && $this->_file && $this->_file->id==$file)
+                    $file=$this->_file;
+                else
+                    $file = new File($this->_root, $file);
+            }
+            elseif ($this->file_id>0) {
+                if ($this->_file && $this->file_id==$this->_file->id)
+                    $file=$this->_file;
+                else
+                    $file=new File($this->_root, $this->file_id);
+            } else {
+                $this->errors[] = 'Undefined file.';
+                return false;
+            }
+
+        }
+        if (!($file instanceof File))
+            throw new Exception('Incorrect object!');
+        if ($file->id == 0) {
+            $this->errors[] = 'Empty file.';
+            return false;
+        }
+        $this->file_id=$file->id;
+        $this->_file=$file;
+        return true;
+    }
+
+    //прикрепляем репозитарий
+    public function setRepository($repository)
+    {
+        if (!is_object($repository)) {
+            $repository = intval($repository);
+            if ($repository > 0) {
+                if ($repository==$this->repository_id && $this->_repository && $this->_repository->id==$repository)
+                    $repository=$this->_repository;
+                else
+                    $repository = new Repository($this->_root, $repository);
+            }
+            elseif ($this->repository_id>0) {
+                if ($this->_repository && $this->repository_id==$this->_repository->id)
+                    $repository=$this->_repository;
+                else
+                    $repository=new Repository($this->_root, $this->repository_id);
+            } else {
+                $this->errors[] = 'Undefined repository.';
+                return false;
+            }
+
+        }
+        if (!($repository instanceof Repository))
+            throw new Exception('Incorrect object!');
+        if ($repository->id == 0) {
+            $this->errors[] = 'Empty repository.';
+            return false;
+        }
+        $this->repository_id=$repository->id;
+        $this->_repository=$repository;
+        return true;
+    }
+
+    public function save()
+    {
+        if (!$this->setFile())
+            return false;
+        if (!$this->setRepository())
+            return false;
+        return parent::save();
+    }
+
+    public function remove()
+    {
+        if ($this->setFile(0))
+            if (!$this->_file->remove())
+            {
+                $this->_errors=array_merge($this->_errors, $this->_file->getErrors());
+                return false;
+            }
+        return parent::remove();
+    }
+
+    public function delete()
+    {
+        if ($this->setFile(0))
+            if (!$this->_file->delete())
+            {
+                $this->_errors=array_merge($this->_errors, $this->_file->getErrors());
+                return false;
+            }
+        return parent::delete();
+    }
+
+    public function getErrors()
+    {
+        return $this->_errors;
+    }
+
+}
+
+//Репозитарий (сущность для хранения множества версий объекта (например файлы))
+class Repository extends Entity
+{
+    private
+        $_root,
+        $_errors = [];
+    protected
+        $_table = 'storage',
+        $_list = [];
+    public
+        $user_id = 0,
+        $target = '',
+        $name = '',
+        $description = '',
+        $data = [];
+
+    public function __construct($root, $id = 0)
+    {
+        parent::__construct();
+        $this->_root = $root;
+        if ($id > 0)
+            $this->get($id);
+    }
+
+    protected function _setTypes()
+    {
+        parent::_setTypes();
+        $this->_types['target'] = 'string';
+        $this->_types['name'] = 'string';
+        $this->_types['description'] = 'string';
+        $this->_types['data'] = 'array';
+    }
+}
 
 
+//коллекция файлов
+class Files extends Entity
+{
+    private
+        $_root;
+
+    public function __construct($root)
+    {
+        parent::__construct();
+        $this->_root = $root;
+    }
+
+    public function getList($conditions, $limit = 0, $page = 1, $sort = 'desc')
+    {
+
+    }
 }
