@@ -33,8 +33,8 @@ class Esc
             $value = floatval($value);
         elseif ($type == 'bool')
             $value = (int)!!$value;
-        elseif ($type == 'json')
-            $value = json_encode($value);
+        elseif ($type == 'array')
+            $value = json_encode(is_array($value)?$value:[$value]);
         elseif ($type == 'timestamp') {
             if (preg_match('/^\d+$/s', $value))
                 $value = date('Y-m-d H:i:s');
@@ -107,7 +107,7 @@ class Entity
         $data = [];
         $create = true;
         if ($values['id'] > 0) {
-            if (db_result("SELECT COUNT(*) FROM ` $this->_table` WHERE `id`=" . Esc::sql($values['id'], 'int')) > 0)
+            if (db_result("SELECT COUNT(*) FROM `$this->_table` WHERE `id`=" . Esc::sql($values['id'], $this->_types['id'])) > 0)
                 $create = false;
         }
         if ($create) {
@@ -127,7 +127,7 @@ class Entity
             if (!$result)
                 return false;
         } else {
-            $result = db_request("UPDATE `$this->_table` SET " . implode(', ', $data) . " WHERE `id`=" . Esc::sql($values['id'], 'int'));
+            $result = db_request("UPDATE `$this->_table` SET " . implode(', ', $data) . " WHERE `id`=" . Esc::sql($values['id'], $this->_types['id']));
             if (!$result)
                 return false;
             $result = $values['id'];
@@ -138,10 +138,9 @@ class Entity
     //"мягко" удаляем запись
     public function remove()
     {
-        if ($this->deleted_at=='0000-00-00 00:00:00')
-        {
-            $this->deleted_at=date('Y-m-d H:i:s');
-            $this->save();
+        if ($this->deleted_at == '0000-00-00 00:00:00') {
+            $this->deleted_at = date('Y-m-d H:i:s');
+            db_request("UPDATE `$this->_table` SET `deleted_at`='" . Esc::sql($this->deleted_at, $this->_types['deleted_at']) . "' WHERE `id`=" . Esc::sql($this->id, $this->_types['id']));
         }
         return $this;
     }
@@ -149,12 +148,19 @@ class Entity
     //восстанавливаем запись
     public function restore()
     {
-        if ($this->deleted_at!='0000-00-00 00:00:00')
-        {
-            $this->deleted_at='0000-00-00 00:00:00';
-            $this->save();
+        if ($this->deleted_at != '0000-00-00 00:00:00') {
+            $this->deleted_at = '0000-00-00 00:00:00';
+            db_request("UPDATE `$this->_table` SET `deleted_at`='" . Esc::sql($this->deleted_at, $this->_types['deleted_at']) . "' WHERE `id`=" . Esc::sql($this->id, $this->_types['id']));
         }
         return $this;
+    }
+
+    //полное удаление записи
+    public function delete()
+    {
+        db_request("DELETE FROM `$this->_table` WHERE `id`=" . Esc::sql($this->id, $this->_types['id']));
+        $this->id = 0;
+        return true;
     }
 
     //заполняем объект из массива
@@ -162,8 +168,19 @@ class Entity
     {
         $fields = $this->__toArray();
         foreach ($fields as $k => $v)
-            if (isset($data[$k]))
+            if (isset($data[$k])) {
+                switch ($this->_types[$k]) {
+                    case 'array':
+                        if (!is_array($data[$k]))
+                        {
+                            if (!$tmp=@json_decode($data[$k]))
+                                $tmp=[$tmp];
+                            $data[$k]=is_array($tmp)?$tmp:[$tmp];
+                        }
+                        break;
+                }
                 $this->$k = $data[$k];
+            }
         return $this;
     }
 
@@ -215,7 +232,8 @@ class Entity
 class File extends Entity
 {
     private
-        $_root;
+        $_root,
+        $_errors = [];
     protected
         $_table = 'files';
     public
@@ -236,20 +254,6 @@ class File extends Entity
             $this->get($id);
     }
 
-
-    public function save()
-    {
-        $this->path((string) $this->path);
-        if (!strlen($this->path))
-            throw new Exception('Path is emppty.');
-        if (!file_exists($this->_root.'/'.$this->path))
-            throw new Exception('File "'.$this->path.'" not found.');
-        if (!is_file($this->_root.'/'.$this->path))
-            throw new Exception('Path "'.$this->path.'" is not file.');
-
-        return parent::save();
-    }
-
     protected function _setTypes()
     {
         parent::_setTypes();
@@ -259,16 +263,109 @@ class File extends Entity
         $this->_types['description'] = 'string';
         $this->_types['path'] = 'string';
         $this->_types['size'] = 'int';
-        $this->_types['data'] = 'json';
-
+        $this->_types['data'] = 'array';
     }
 
-    public function path($path) {
-        $path=preg_replace('/\.{1,}/','.',$path);
-        $path=preg_replace('/\\{1,}/','/',$path);
-        $path=preg_replace('/\\{1,}/','\\',$path);
+    public function save()
+    {
+        if (!$this->fileExists())
+            return false;
+        if (!$this->checkFileType())
+            return false;
+        return parent::save();
+    }
+
+    public function delete()
+    {
+        $this->path((string)$this->path);
+        if ($this->fileExists())
+            if (!@unlink($this->_root . '/' . $this->path)) {
+                $this->_errors[] = 'Access denied. File "' . $this->path . '" is not deleted.';
+                return false;
+            }
+        return parent::delete();
+    }
+
+    public function checkFileType()
+    {
+        if ($this->fileExists()) {
+            $ext = strtolower(preg_replace('/.+\.([a-z0-9]+)$/si', '\1', $this->path));
+            switch ($ext) {
+                default:
+                    $this->_errors[] = 'Unknown file type (file: "' . $this->path . '").';
+                    return false;
+                    break;
+                case 'jpeg':
+                case 'jpg':
+                case 'gif':
+                case 'png':
+                case 'bmp':
+                    $this->type = 'image';
+                    break;
+
+                case 'doc':
+                case 'docx':
+                    $this->type = 'word';
+                    break;
+
+                case 'xls':
+                case 'xlsx':
+                    $this->type = 'excel';
+                    break;
+
+                case 'zip':
+                case 'rar':
+                case 'tar':
+                case 'gz':
+                case '7z':
+                    $this->type = 'archive';
+                    break;
+
+                case 'ptt':
+                case 'pptx':
+                    $this->type = 'presentation';
+                    break;
+
+                case 'pdf':
+                    $this->type = 'pdf';
+                    break;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    public function path($path)
+    {
+        $path = preg_replace('/\.{1,}/', '.', $path);
+        $path = preg_replace('/\\{1,}/', '/', $path);
+        $path = preg_replace('/\\{1,}/', '\\', $path);
         return $path;
     }
+
+    public function fileExists()
+    {
+        $this->path = $this->path((string)$this->path);
+        if (!strlen($this->path)) {
+            $this->_errors[] = 'Path is empty.';
+            return false;
+        }
+        if (!file_exists($this->_root . '/' . $this->path)) {
+            $this->_errors[] = 'File "' . $this->path . '" not found.';
+            return false;
+        }
+        if (!is_file($this->_root . '/' . $this->path)) {
+            $this->_errors[] = 'Path "' . $this->path . '" is not file.';
+            return false;
+        }
+        return true;
+    }
+
+    public function getErrors()
+    {
+        return $this->_errors;
+    }
+
 }
 
 class Files
