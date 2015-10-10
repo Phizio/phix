@@ -129,7 +129,7 @@ if (!empty($user_id) && !empty($user_activate)) {
                                     `activate_code` = '$user_activate'");
         $mailer=new mailer($app['name'].'<'.$app['email'].'>');
         if (isset($app['smtp']))
-            $mailer->setSMTP($app['smtp']['host'], $app['smtp']['port'], $app['smtp']['user'], $app['smtp']['password']);
+            $mailer->setSMTP($app['smtp']['server'], $app['smtp']['port'], $app['smtp']['user'], $app['smtp']['password']);
         $html=r('emails/register.html', [
             'domain' => $app['domain'],
             'user_id' => $user_id,
@@ -150,7 +150,7 @@ if (!empty($user_id) && !empty($user_activate)) {
             "From: {$app['name']}<{$app['email']}>\r\nContent-type: text/html; charset=utf-8\r\n"
         );
 */
-        $page['success_msg'] .= "<strong>Регистрация прошла успешно!</strong><br/>Ваш E-mail отправлено письмо cо ссылкой для активации личного кабинета";
+        $page['success_msg'] .= "<strong>Регистрация прошла успешно!</strong><br/>На Ваш E-mail отправлено письмо cо ссылкой для активации личного кабинета";
     }
 } else if ($act == "recovery") {
     $log .= "режим восстановления пароля<br />";
@@ -179,7 +179,7 @@ if (!empty($user_id) && !empty($user_activate)) {
                             WHERE `id`='{$user['user_id']}'")) {
                 $mailer=new mailer($app['name'].'<'.$app['email'].'>');
                 if (isset($app['smtp']))
-                    $mailer->setSMTP($app['smtp']['host'], $app['smtp']['port'], $app['smtp']['user'], $app['smtp']['password']);
+                    $mailer->setSMTP($app['smtp']['server'], $app['smtp']['port'], $app['smtp']['user'], $app['smtp']['password']);
 
                 $html=r('emails/recovery.html', [
                     'domain' => $app['domain'],

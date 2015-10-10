@@ -375,7 +375,7 @@ class RepositoryFile extends Entity
         $_root,
         $_errors = [];
     protected
-        $_table = 'storage_files',
+        $_table = 'repository_files',
         $_file = null,
         $_repository;
     public
@@ -432,16 +432,15 @@ class RepositoryFile extends Entity
         if (!is_object($file)) {
             $file = intval($file);
             if ($file > 0) {
-                if ($file==$this->file_id && $this->_file && $this->_file->id==$file)
-                    $file=$this->_file;
+                if ($file == $this->file_id && $this->_file && $this->_file->id == $file)
+                    $file = $this->_file;
                 else
                     $file = new File($this->_root, $file);
-            }
-            elseif ($this->file_id>0) {
-                if ($this->_file && $this->file_id==$this->_file->id)
-                    $file=$this->_file;
+            } elseif ($this->file_id > 0) {
+                if ($this->_file && $this->file_id == $this->_file->id)
+                    $file = $this->_file;
                 else
-                    $file=new File($this->_root, $this->file_id);
+                    $file = new File($this->_root, $this->file_id);
             } else {
                 $this->errors[] = 'Undefined file.';
                 return false;
@@ -454,8 +453,8 @@ class RepositoryFile extends Entity
             $this->errors[] = 'Empty file.';
             return false;
         }
-        $this->file_id=$file->id;
-        $this->_file=$file;
+        $this->file_id = $file->id;
+        $this->_file = $file;
         return true;
     }
 
@@ -465,16 +464,15 @@ class RepositoryFile extends Entity
         if (!is_object($repository)) {
             $repository = intval($repository);
             if ($repository > 0) {
-                if ($repository==$this->repository_id && $this->_repository && $this->_repository->id==$repository)
-                    $repository=$this->_repository;
+                if ($repository == $this->repository_id && $this->_repository && $this->_repository->id == $repository)
+                    $repository = $this->_repository;
                 else
                     $repository = new Repository($this->_root, $repository);
-            }
-            elseif ($this->repository_id>0) {
-                if ($this->_repository && $this->repository_id==$this->_repository->id)
-                    $repository=$this->_repository;
+            } elseif ($this->repository_id > 0) {
+                if ($this->_repository && $this->repository_id == $this->_repository->id)
+                    $repository = $this->_repository;
                 else
-                    $repository=new Repository($this->_root, $this->repository_id);
+                    $repository = new Repository($this->_root, $this->repository_id);
             } else {
                 $this->errors[] = 'Undefined repository.';
                 return false;
@@ -487,8 +485,8 @@ class RepositoryFile extends Entity
             $this->errors[] = 'Empty repository.';
             return false;
         }
-        $this->repository_id=$repository->id;
-        $this->_repository=$repository;
+        $this->repository_id = $repository->id;
+        $this->_repository = $repository;
         return true;
     }
 
@@ -504,9 +502,8 @@ class RepositoryFile extends Entity
     public function remove()
     {
         if ($this->setFile(0))
-            if (!$this->_file->remove())
-            {
-                $this->_errors=array_merge($this->_errors, $this->_file->getErrors());
+            if (!$this->_file->remove()) {
+                $this->_errors = array_merge($this->_errors, $this->_file->getErrors());
                 return false;
             }
         return parent::remove();
@@ -515,9 +512,8 @@ class RepositoryFile extends Entity
     public function delete()
     {
         if ($this->setFile(0))
-            if (!$this->_file->delete())
-            {
-                $this->_errors=array_merge($this->_errors, $this->_file->getErrors());
+            if (!$this->_file->delete()) {
+                $this->_errors = array_merge($this->_errors, $this->_file->getErrors());
                 return false;
             }
         return parent::delete();
@@ -539,12 +535,12 @@ class Repository extends Entity
 {
     private
         $_root,
-        $_errors = [];
+        $_errors = [],
+        $_last_id;
     protected
         $_table = 'storage',
-        $_list = [];
+        $_list;
     public
-        $user_id = 0,
         $target = '',
         $name = '',
         $description = '',
@@ -558,6 +554,12 @@ class Repository extends Entity
             $this->get($id);
     }
 
+    public function get($id, $all = false)
+    {
+        parent::get($id, $all);
+        $this->_last_id = $this->id;
+    }
+
     protected function _setTypes()
     {
         parent::_setTypes();
@@ -566,6 +568,94 @@ class Repository extends Entity
         $this->_types['description'] = 'string';
         $this->_types['data'] = 'array';
     }
+
+    //добавляем версию файла в репозиторий
+    public function addFile($file)
+    {
+        if (!$this->_last_id || $this->id == !$this->_last_id) {
+            $this->_errors[] = 'Repository is not saved.';
+            return false;
+        }
+        if (!is_object($file)) {
+            $file = intval($file);
+            if ($file > 0)
+                $file = new File($this->_root, $file);
+            else {
+                $this->errors[] = 'Undefined file.';
+                return false;
+            }
+        }
+        if (!($file instanceof File))
+            throw new Exception('Incorrect object!');
+        if ($file->id == 0) {
+            $this->errors[] = 'Empty file.';
+            return false;
+        }
+        $rFile = new RepositoryFile($this->_root);
+        if (!$rFile->setRepository($this) || !$rFile->setFile($file) || !$rFile->save()) {
+            $this->_errors = array_merge($this->_errors, $rFile->getErrors());
+            return false;
+        }
+        if ($this->_list)
+            $this->_list[] = $rFile;
+        return true;
+    }
+
+    //возвращает актуальную версию файла
+    public function getFile()
+    {
+        $data=db_row("SELECT * FROM `repository_files` WHERE `repository_id`=".Esc::sql($this->repository_id, $this->types['id'])." ORDER by `created_at` DESC LIMIT 0, 1");
+        if (!$data)
+            return false;
+        $file=new RepositoryFile($this->_root);
+        $file->setFieldsFromArray($data);
+        return $file;
+    }
+
+    //список объектов версий файлов
+    //$refresh = true: принудительно дёргаем из БД
+    public function getFiles($refresh=false, $sort='DESC')
+    {
+        if (!$refresh && $this->_list)
+            return $this->_list;
+        $sort=mb_strtoupper($sort)=='DESC'?'DESC':'ASC';
+        $list=db_array("SELECT * FROM `repository_files` WHERE `repository_id`=".Esc::sql($this->repository_id, $this->types['id'])." ORDER by `created_at` $sort");
+        $this->_list=[];
+        foreach ($list as $k=>$value){
+            $this->_list[$k]=new RepositoryFile($this->_root);
+            $this->_list[$k]->setFieldsFromArray($value);
+        }
+        return $this->_list;
+    }
+
+    public function remove()
+    {
+        $this->getFiles(true);
+        foreach ($this->_list as $file)
+            if (!$file->remove()) {
+                $this->_errors = array_merge($this->_errors, $file->getErrors());
+                return false;
+            }
+        return parent::remove();
+    }
+
+    public function delete()
+    {
+        $this->getFiles(true);
+        foreach ($this->_list as $file)
+            if (!$file->delete()) {
+                $this->_errors = array_merge($this->_errors, $file->getErrors());
+                return false;
+            }
+        return parent::delete();
+    }
+
+
+    public function getErrors()
+    {
+        return $this->_errors;
+    }
+
 }
 
 
