@@ -18,3 +18,4 @@ $repo->save();
 var_dump($repo->addFile($test));
 print_r($repo->getErrors());
 print_r($repo->__toArray());
+//var_dump($repo->remove());
