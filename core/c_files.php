@@ -84,7 +84,7 @@ class Entity
 
     //загрузить запись в объект;
     //по умолчанию грузятся только не удаленные записи
-    //если надо удаленные, то $all=true
+    //если надо в том числе удаленные, то $all=true
     public function get($id, $all = false)
     {
         $result = db_row("SELECT * FROM `$this->_table` WHERE `id`=" . esc::sql($id, 'int') .
@@ -155,6 +155,11 @@ class Entity
             db_request("UPDATE `$this->_table` SET `deleted_at`='" . Esc::sql($this->deleted_at, $this->_types['deleted_at']) . "' WHERE `id`=" . Esc::sql($this->id, $this->_types['id']));
         }
         return $this;
+    }
+
+    public function isDeleted()
+    {
+        return $this->deleted_at=='0000-00-00 00:00:00';
     }
 
     //полное удаление записи
@@ -233,8 +238,7 @@ class EntityList
     protected
         $_table,
         $_types = [],
-        $_list = [],
-        $_total;
+        $_list = [];
 
     public function __construct()
     {
@@ -244,6 +248,17 @@ class EntityList
     //выбрать все записи
     public function all($sort = 'DESC', $all = false)
     {
+        return $this->search([], [], $sort, $all);
+    }
+
+    //выбрать записи, удовлетворяющие условиям
+    //$conditions - массив условий в формате билдера ($this->_builder)
+    //$navigation - массив для ограничения по количеству ['start'=>'нач. значение', 'limit'=>'кол-во записей']
+    public function search($conditions=[], $navigation=[], $sort = 'DESC', $all = false)
+    {
+        if (!$all)
+            $conditions['deleted_at'] = '0000-00-00 00:00:00';
+        $conditions = $this->_builder($conditions);
         if (!is_array($sort) || !isset($sort['field'], $sort['type']))
             $sort = mb_strtoupper($sort) == 'DESC' ? '`id` DESC' : '`id` ASC';
         else {
@@ -251,22 +266,25 @@ class EntityList
                 $sort['field'] = 'id';
             $sort = mb_strtoupper($sort) == 'DESC' ? '`' . $sort['field'] . '` DESC' : '`' . $sort['field'] . '` ASC';
         }
+        if (isset($navigation['start'], $navigation['limit']))
+            $limit = " LIMIT " . intval($navigation['start']) . ", " . intval($navigation['limit']);
+        else
+            $limit = '';
         $result = db_array("SELECT * FROM `$this->_table`" .
-            (!$all ? (" and `deleted_at`='0000-00-00 00:00:00'") : '') .
-            "ORDER by $sort");
+            (strlen($conditions) ? " WHERE $conditions" : '') .
+            "ORDER by $sort" . $limit);
         $this->_list = $result;
         return $this->_list;
     }
 
-    //выбрать записи, удовлетворяющие условиям
-    //придумать логический формат AND И OR
-    public function search($conditions, $navigation, $sort = 'DESC', $all = false)
+    //подсчитать записи, удовлетворяющие условиям
+    public function count($conditions, $all = false)
     {
-        $conditions=$this->_builder($conditions);
-        print_r('WHERE: '.$conditions);
-        //foreach ()
+        if (!$all)
+            $conditions['deleted_at'] = '0000-00-00 00:00:00';
+        $conditions = $this->_builder($conditions);
+        return db_result("SELECT COUNT(*) FROM `$this->_table`" . (strlen($conditions) ? " WHERE $conditions" : ''));
     }
-
 
 //указываем типы данных для фильтрации
     protected function _setTypes()
@@ -276,10 +294,17 @@ class EntityList
         $this->_types['created_at'] = 'timestamp';
         $this->_types['updated_at'] = 'timestamp';
         $this->_types['deleted_at'] = 'timestamp';
-        //todo: удалить
-        $this->_types['name'] = 'string';
     }
 
+    //конструктор запросов
+    // для условия задаём оператор перед именем поля, например ['!field'='value']
+    // >, < : больше, меньше (для int, float, bool, timestamp)
+    // >=, <= : больше или равно, меньше или раньше (для int, float, bool, timestamp)
+    // !, = : не равно, равно (для всех, кроме array)
+    // % = LIKE (для string)
+    // * = IN (для всех, кроме array)
+    //
+    //todo: сделать поиск по типу array
     private function _builder($conditions)
     {
         $result = [];
@@ -292,7 +317,7 @@ class EntityList
                     if ($k2[1] == 'and' || $k2[1] == 'or' || isset($this->_types[$k2[1]])) {
                         $str = '';
                         if (is_array($v) || isset($this->_types[$k2[1]]))
-                            $str = $this->_builder([$k2[0].$k2[1] => $v]);
+                            $str = $this->_builder([$k2[0] . $k2[1] => $v]);
                         if ($str and strlen($str))
                             $tmp[] = $str;
                     }
@@ -309,7 +334,7 @@ class EntityList
                     if ($k2[1] == 'and' || $k2[1] == 'or' || isset($this->_types[$k2[1]])) {
                         $str = '';
                         if (is_array($v) || isset($this->_types[$k2[1]]))
-                            $str = $this->_builder([$k2[0].$k2[1] => $v]);
+                            $str = $this->_builder([$k2[0] . $k2[1] => $v]);
                         if ($str and strlen($str))
                             $tmp[] = $str;
                     }
@@ -341,8 +366,8 @@ class EntityList
                     case 'bool':
                         if ($k[0] == '!')
                             $tmp = "`$k[1]` != " . Esc::sql($condition, $t);
-                        elseif ($k[0]=='>' || $k[0]=='<')
-                            $tmp="`$k[1]` $k[0] " . Esc::sql($condition, $t);
+                        elseif ($k[0] == '>' || $k[0] == '<' || $k[0] == '<=' || $k[0] == '>=')
+                            $tmp = "`$k[1]` $k[0] " . Esc::sql($condition, $t);
                         elseif ($k[0] == '*' and is_array($condition)) {
                             foreach ($condition as $k2 => $v2)
                                 $condition[$k2] = Esc::sql($v2, $t);
@@ -352,15 +377,15 @@ class EntityList
                         break;
                     case 'timestamp':
                         if ($k[0] == '!')
-                            $tmp = "`$k[1]` != '" . Esc::sql($condition, $t)."'";
-                        elseif ($k[0]=='>' || $k[0]=='<')
-                            $tmp="`$k[1]` $k[0] '" . Esc::sql($condition, $t)."'";
+                            $tmp = "`$k[1]` != '" . Esc::sql($condition, $t) . "'";
+                        elseif ($k[0] == '>' || $k[0] == '<')
+                            $tmp = "`$k[1]` $k[0] '" . Esc::sql($condition, $t) . "'";
                         elseif ($k[0] == '*' and is_array($condition)) {
                             foreach ($condition as $k2 => $v2)
                                 $condition[$k2] = Esc::sql($v2, $t);
                             $tmp = "`$k[1]` IN ('" . implode("', '", $condition) . "')";
                         } else
-                            $tmp = "`$k[1]` = '" . Esc::sql($condition, $t)."'";
+                            $tmp = "`$k[1]` = '" . Esc::sql($condition, $t) . "'";
                         break;
                 }
                 if (strlen($tmp))
@@ -373,12 +398,11 @@ class EntityList
     private function _expression($expression)
     {
         $expression = mb_strtolower($expression);
-        if (preg_match('/^([<>=!\*%])[^a-z0-9_]*([a-z0-9_]+)[^a-z0-9_]*$/s', $expression, $result))
+        if (preg_match('/^([<>=!\*%]{1,2})[^a-z0-9_]*([a-z0-9_]+)[^a-z0-9_]*$/s', $expression, $result))
             return [$result[1], $result[2]];
         else
             return ['=', $expression];
     }
-
 
     public function __toArray()
     {
@@ -833,16 +857,14 @@ class Repository extends Entity
 
 }
 
-class Repositories
-{
-
-}
-
-//коллекция файлов
-class Files extends Entity
+//коллекция репозитариев
+class Repositories extends EntityList
 {
     private
         $_root;
+    protected
+        $_table = 'repositories';
+
 
     public function __construct($root)
     {
@@ -850,8 +872,88 @@ class Files extends Entity
         $this->_root = $root;
     }
 
-    public function getList($conditions, $limit = 0, $page = 1, $sort = 'desc')
+    public function all($sort = 'DESC', $all = false)
     {
-
+        parent::all($sort, $all);
+        $this->_toRepository();
+        return $this->_list;
     }
+
+    private function _toRepository()
+    {
+        foreach ($this->_list as $k => $v)
+            if (is_array($v)) {
+                $this->_list[$k]=new Repository($this->_root);
+                $this->_list[$k]->setFieldsFromArray($v);
+            }
+    }
+
+    public function search($conditions=[], $navigation=[], $sort = 'DESC', $all = false)
+    {
+        parent::search($conditions, $navigation, $sort, $all);
+        $this->_toRepository();
+        return $this->_list;
+    }
+
+    protected function _setTypes()
+    {
+        parent::_setTypes();
+        $this->_types['target'] = 'string';
+        $this->_types['name'] = 'string';
+        $this->_types['description'] = 'string';
+        $this->_types['data'] = 'array';
+    }
+
+}
+
+//коллекция файлов
+class Files extends EntityList
+{
+    private
+        $_root;
+    protected
+        $_table = 'files';
+
+
+    public function __construct($root)
+    {
+        parent::__construct();
+        $this->_root = $root;
+    }
+
+    public function all($sort = 'DESC', $all = false)
+    {
+        parent::all($sort, $all);
+        $this->_toFile();
+        return $this->_list;
+    }
+
+    private function _toFile()
+    {
+        foreach ($this->_list as $k => $v)
+            if (is_array($v)) {
+                $this->_list[$k]=new File($this->_root);
+                $this->_list[$k]->setFieldsFromArray($v);
+            }
+    }
+
+    public function search($conditions=[], $navigation=[], $sort = 'DESC', $all = false)
+    {
+        parent::search($conditions, $navigation, $sort, $all);
+        $this->_toFile();
+        return $this->_list;
+    }
+
+    protected function _setTypes()
+    {
+        parent::_setTypes();
+        $this->_types['target'] = 'string';
+        $this->_types['type'] = 'string';
+        $this->_types['name'] = 'string';
+        $this->_types['description'] = 'string';
+        $this->_types['path'] = 'string';
+        $this->_types['size'] = 'int';
+        $this->_types['data'] = 'array';
+    }
+
 }

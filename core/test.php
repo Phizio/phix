@@ -10,34 +10,10 @@ require_once('c_files.php');
 
 $root = $_SERVER['DOCUMENT_ROOT'] . '/local/files';
 
-$test=new \AlexKonov\EntityList();
-$test->search(
-    [
-        '>id'=>12,
-        'or'=>[
-            'created_at'=>'1234-12-12 12:12:21',
-            '>created_at'=>'1234-12-12 12:12:22',
-            '<created_at'=>'1234-12-12 12:12:23',
-            '!created_at'=>'1234-12-12 12:12:24',
-            'and'=>[
-                'name'=>10,
-                '!name'=>11,
-                'and'=>[
-                    'name'=>12,
-                    '!name'=>13,
-                ],
-                'or'=>[
-                    'created_at'=>'1234-12-12 12:12:21',
-                    '>created_at'=>'1234-12-12 12:12:22',
-                    '<created_at'=>'1234-12-12 12:12:23',
-                    '!created_at'=>'1234-12-12 12:12:24',
-                ]
-
-            ],
-        ]
-
-    ],
-    []);
+$test=new \AlexKonov\Repositories($root);
+$list=$test->search(['>=id'=>1], ['start'=>0, 'limit'=>5]);
+foreach ($list as $v)
+    print_r($v->__toArray());
 
 /*
 $repo = new AlexKonov\Repository($root);
