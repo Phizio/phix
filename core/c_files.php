@@ -160,7 +160,7 @@ class Entity
     //полное удаление записи
     public function delete()
     {
-        db_request("DELETE FROM `$this->_table` WHERE `id`=" . Esc::sql($this->id, $this->_types['id']).chr(10));
+        db_request("DELETE FROM `$this->_table` WHERE `id`=" . Esc::sql($this->id, $this->_types['id']) . chr(10));
         $this->id = 0;
         return true;
     }
@@ -225,7 +225,66 @@ class Entity
             $this->_fields[$field] = null;
         return $this->_fields;
     }
+}
 
+//Список сущностей
+class EntityList
+{
+    protected
+        $_table,
+        $_types = [],
+        $_list = [],
+        $_total;
+
+    public function __construct()
+    {
+        $this->_setTypes();
+    }
+
+    //выбрать все записи
+    public function all($sort='DESC', $all = false)
+    {
+        if (!is_array($sort) || !isset($sort['field'], $sort['type']))
+            $sort = mb_strtoupper($sort) == 'DESC' ? '`id` DESC' : '`id` ASC';
+        else {
+            if (!isset($this->_types[$sort['field']]))
+                $sort['field'] = 'id';
+            $sort = mb_strtoupper($sort) == 'DESC' ? '`' . $sort['field'] . '` DESC' : '`' . $sort['field'] . '` ASC';
+        }
+        $result = db_array("SELECT * FROM `$this->_table`" .
+            (!$all ? (" and `deleted_at`='0000-00-00 00:00:00'") : '') .
+            "ORDER by $sort");
+        $this->_list = $result;
+        return $this->_list;
+    }
+
+    //выбрать записи, удовлетворяющие условиям
+    public function search($conditions, $navigation, $sort='DESC', $all=false)
+    {
+        $query=[];
+        //foreach ()
+    }
+
+
+//указываем типы данных для фильтрации
+    protected function _setTypes()
+    {
+        $this->_types['id'] = 'int';
+        $this->_types['user_id'] = 'int';
+        $this->_types['created_at'] = 'timestamp';
+        $this->_types['updated_at'] = 'timestamp';
+        $this->_types['deleted_at'] = 'timestamp';
+    }
+
+    public function __toArray()
+    {
+        return $this->_list;
+    }
+
+    public function __toString()
+    {
+        return json_encode($this->__toArray());
+    }
 
 }
 
@@ -279,8 +338,7 @@ class File extends Entity
     {
         $this->path((string)$this->path);
         if ($this->fileExists())
-            if (!@unlink($this->_root . '/' . $this->path))
-            {
+            if (!@unlink($this->_root . '/' . $this->path)) {
                 $this->_errors[] = 'Access denied. File "' . $this->path . '" is not deleted.';
                 return false;
             }
@@ -290,7 +348,7 @@ class File extends Entity
     public function checkFileType()
     {
         if ($this->fileExists()) {
-            $ext = strtolower(preg_replace('/.+\.([a-z0-9]+)$/si', '\1', $this->path));
+            $ext = mb_strtolower(preg_replace('/.+\.([a-z0-9]+)$/si', '\1', $this->path));
             switch ($ext) {
                 default:
                     $this->_errors[] = 'Unknown file type (file: "' . $this->path . '").';
@@ -359,6 +417,7 @@ class File extends Entity
             $this->_errors[] = 'Path "' . $this->path . '" is not file.';
             return false;
         }
+        $this->size = filesize($this->_root . '/' . $this->path);
         return true;
     }
 
@@ -670,6 +729,10 @@ class Repository extends Entity
 
 }
 
+class Repositories
+{
+
+}
 
 //коллекция файлов
 class Files extends Entity
