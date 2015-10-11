@@ -160,7 +160,7 @@ class Entity
     //полное удаление записи
     public function delete()
     {
-        db_request("DELETE FROM `$this->_table` WHERE `id`=" . Esc::sql($this->id, $this->_types['id']));
+        db_request("DELETE FROM `$this->_table` WHERE `id`=" . Esc::sql($this->id, $this->_types['id']).chr(10));
         $this->id = 0;
         return true;
     }
@@ -279,7 +279,8 @@ class File extends Entity
     {
         $this->path((string)$this->path);
         if ($this->fileExists())
-            if (!@unlink($this->_root . '/' . $this->path)) {
+            if (!@unlink($this->_root . '/' . $this->path))
+            {
                 $this->_errors[] = 'Access denied. File "' . $this->path . '" is not deleted.';
                 return false;
             }
@@ -394,8 +395,8 @@ class RepositoryFile extends Entity
     protected function _setTypes()
     {
         parent::_setTypes();
-        $this->_types['repository_id'] = 0;
-        $this->_types['file_id'] = 0;
+        $this->_types['repository_id'] = 'int';
+        $this->_types['file_id'] = 'int';
     }
 
     //greed - "жадность", вместе с версией сразу грузим прикреплённый файл
@@ -428,7 +429,7 @@ class RepositoryFile extends Entity
     }
 
     //прикрепляем файл
-    public function setFile($file=0)
+    public function setFile($file = 0)
     {
         if (!is_object($file)) {
             $file = intval($file);
@@ -446,7 +447,6 @@ class RepositoryFile extends Entity
                 $this->errors[] = 'Undefined file.';
                 return false;
             }
-
         }
         if (!($file instanceof File))
             throw new Exception('Incorrect object!');
@@ -460,7 +460,7 @@ class RepositoryFile extends Entity
     }
 
     //прикрепляем Репозиторий
-    public function setRepository($repository=0)
+    public function setRepository($repository = 0)
     {
         if (!is_object($repository)) {
             $repository = intval($repository);
@@ -502,11 +502,12 @@ class RepositoryFile extends Entity
 
     public function remove()
     {
-        if ($this->setFile(0))
+        if ($this->setFile(0)) {
             if (!$this->_file->remove()) {
                 $this->_errors = array_merge($this->_errors, $this->_file->getErrors());
                 return false;
             }
+        }
         return parent::remove();
     }
 
@@ -559,14 +560,13 @@ class Repository extends Entity
     public function get($id, $all = false, $greed = false)
     {
         parent::get($id, $all);
-
-        $result=parent::get($id, $all);
+        $result = parent::get($id, $all);
         if ($result) {
             $this->_last_id = $this->id;
             if ($greed)
                 $this->getFiles(true);
             else
-                $this->_list=null;
+                $this->_list = null;
         }
         return $result;
 
@@ -616,25 +616,25 @@ class Repository extends Entity
     //возвращает актуальную версию файла
     public function getFile()
     {
-        $data=db_row("SELECT * FROM `repository_files` WHERE `repository_id`=".Esc::sql($this->repository_id, $this->types['id'])." ORDER by `created_at` DESC LIMIT 0, 1");
+        $data = db_row("SELECT * FROM `repository_files` WHERE `repository_id`=" . Esc::sql($this->id, $this->types['id']) . " ORDER by `created_at` DESC LIMIT 0, 1");
         if (!$data)
             return false;
-        $file=new RepositoryFile($this->_root);
+        $file = new RepositoryFile($this->_root);
         $file->setFieldsFromArray($data);
         return $file;
     }
 
     //список объектов версий файлов
     //$refresh = true: принудительно дёргаем из БД
-    public function getFiles($refresh=false, $sort='DESC')
+    public function getFiles($refresh = false, $sort = 'DESC')
     {
         if (!$refresh && $this->_list)
             return $this->_list;
-        $sort=mb_strtoupper($sort)=='DESC'?'DESC':'ASC';
-        $list=db_array("SELECT * FROM `repository_files` WHERE `repository_id`=".Esc::sql($this->repository_id, $this->types['id'])." ORDER by `created_at` $sort");
-        $this->_list=[];
-        foreach ($list as $k=>$value){
-            $this->_list[$k]=new RepositoryFile($this->_root);
+        $sort = mb_strtoupper($sort) == 'DESC' ? 'DESC' : 'ASC';
+        $list = db_array("SELECT * FROM `repository_files` WHERE `repository_id`=" . Esc::sql($this->id, $this->types['id']) . " ORDER by `created_at` $sort");
+        $this->_list = [];
+        foreach ($list as $k => $value) {
+            $this->_list[$k] = new RepositoryFile($this->_root);
             $this->_list[$k]->setFieldsFromArray($value);
         }
         return $this->_list;

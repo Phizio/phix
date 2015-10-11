@@ -8,14 +8,9 @@
 header('Content-type: text/plain; charset=utf-8');
 require_once('c_files.php');
 
-$root=$_SERVER['DOCUMENT_ROOT'] . '/local/files';
-$test = new AlexKonov\File($root);
-$test->get(125);
+$root = $_SERVER['DOCUMENT_ROOT'] . '/local/files';
 
-$repo=new AlexKonov\Repository($root);
-$repo->name='Test name';
-$repo->save();
-var_dump($repo->addFile($test));
-print_r($repo->getErrors());
+$repo = new AlexKonov\Repository($root);
+$repo->get(1);
+
 print_r($repo->__toArray());
-//var_dump($repo->remove());
