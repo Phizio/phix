@@ -242,7 +242,7 @@ class EntityList
     }
 
     //выбрать все записи
-    public function all($sort='DESC', $all = false)
+    public function all($sort = 'DESC', $all = false)
     {
         if (!is_array($sort) || !isset($sort['field'], $sort['type']))
             $sort = mb_strtoupper($sort) == 'DESC' ? '`id` DESC' : '`id` ASC';
@@ -259,9 +259,11 @@ class EntityList
     }
 
     //выбрать записи, удовлетворяющие условиям
-    public function search($conditions, $navigation, $sort='DESC', $all=false)
+    //придумать логический формат AND И OR
+    public function search($conditions, $navigation, $sort = 'DESC', $all = false)
     {
-        $query=[];
+        $conditions=$this->_builder($conditions);
+        print_r('WHERE: '.$conditions);
         //foreach ()
     }
 
@@ -274,7 +276,109 @@ class EntityList
         $this->_types['created_at'] = 'timestamp';
         $this->_types['updated_at'] = 'timestamp';
         $this->_types['deleted_at'] = 'timestamp';
+        //todo: удалить
+        $this->_types['name'] = 'string';
     }
+
+    private function _builder($conditions)
+    {
+        $result = [];
+        foreach ($conditions as $k => $condition) {
+            $k = $this->_expression($k);
+            if ($k[1] == 'and' and is_array($condition)) {
+                $tmp = [];
+                foreach ($condition as $k2 => $v) {
+                    $k2 = $this->_expression($k2);
+                    if ($k2[1] == 'and' || $k2[1] == 'or' || isset($this->_types[$k2[1]])) {
+                        $str = '';
+                        if (is_array($v) || isset($this->_types[$k2[1]]))
+                            $str = $this->_builder([$k2[0].$k2[1] => $v]);
+                        if ($str and strlen($str))
+                            $tmp[] = $str;
+                    }
+                }
+                $count = count($tmp);
+                if ($count == 1)
+                    $result[] = $tmp[0];
+                elseif ($count > 1)
+                    $result[] = '(' . implode(' and ', $tmp) . ')';
+            } elseif ($k[1] == 'or' and is_array($condition)) {
+                $tmp = [];
+                foreach ($condition as $k2 => $v) {
+                    $k2 = $this->_expression($k2);
+                    if ($k2[1] == 'and' || $k2[1] == 'or' || isset($this->_types[$k2[1]])) {
+                        $str = '';
+                        if (is_array($v) || isset($this->_types[$k2[1]]))
+                            $str = $this->_builder([$k2[0].$k2[1] => $v]);
+                        if ($str and strlen($str))
+                            $tmp[] = $str;
+                    }
+                }
+                $count = count($tmp);
+                if ($count == 1)
+                    $result[] = $tmp[0];
+                elseif ($count > 1)
+                    $result[] = '(' . implode(' or ', $tmp) . ')';
+
+            } elseif (isset($this->_types[$k[1]])) {
+                $tmp = '';
+                $t = $this->_types[$k[1]];
+                switch ($t) {
+                    case 'string':
+                        if ($k[0] == '%')
+                            $tmp = "`$k[1]` LIKE '" . Esc::sql($condition, $t) . "'";
+                        elseif ($k[0] == '!')
+                            $tmp = "`$k[1]` != '" . Esc::sql($condition, $t) . "'";
+                        elseif ($k[0] == '*' and is_array($condition)) {
+                            foreach ($condition as $k2 => $v2)
+                                $condition[$k2] = Esc::sql($v2, $t);
+                            $tmp = "`$k[1]` IN ('" . implode("', '", $condition) . "')";
+                        } else
+                            $tmp = "`$k[1]` = '" . Esc::sql($condition, $t) . "'";
+                        break;
+                    case 'int':
+                    case 'float':
+                    case 'bool':
+                        if ($k[0] == '!')
+                            $tmp = "`$k[1]` != " . Esc::sql($condition, $t);
+                        elseif ($k[0]=='>' || $k[0]=='<')
+                            $tmp="`$k[1]` $k[0] " . Esc::sql($condition, $t);
+                        elseif ($k[0] == '*' and is_array($condition)) {
+                            foreach ($condition as $k2 => $v2)
+                                $condition[$k2] = Esc::sql($v2, $t);
+                            $tmp = "`$k[1]` IN (" . implode(", ", $condition) . ")";
+                        } else
+                            $tmp = "`$k[1]` = " . Esc::sql($condition, $t);
+                        break;
+                    case 'timestamp':
+                        if ($k[0] == '!')
+                            $tmp = "`$k[1]` != '" . Esc::sql($condition, $t)."'";
+                        elseif ($k[0]=='>' || $k[0]=='<')
+                            $tmp="`$k[1]` $k[0] '" . Esc::sql($condition, $t)."'";
+                        elseif ($k[0] == '*' and is_array($condition)) {
+                            foreach ($condition as $k2 => $v2)
+                                $condition[$k2] = Esc::sql($v2, $t);
+                            $tmp = "`$k[1]` IN ('" . implode("', '", $condition) . "')";
+                        } else
+                            $tmp = "`$k[1]` = '" . Esc::sql($condition, $t)."'";
+                        break;
+                }
+                if (strlen($tmp))
+                    $result[] = $tmp;
+            }
+        }
+        return implode(' and ', $result);
+    }
+
+    private function _expression($expression)
+    {
+        $expression = mb_strtolower($expression);
+        if (preg_match('/^([<>=!\*%])[^a-z0-9_]*([a-z0-9_]+)[^a-z0-9_]*$/s', $expression, $result))
+            return [$result[1], $result[2]];
+        else
+            return ['=', $expression];
+    }
+
 
     public function __toArray()
     {
