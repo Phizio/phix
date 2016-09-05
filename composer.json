@@ -12,6 +12,5 @@
         "datatables/datatables": "^1.10",
         "tubalmartin/cssmin":"^2.4",
         "matthiasmullie/minify":"^1.3"
-        /*"alexkonov/mailer": "^1.0"*/
     }
 }
