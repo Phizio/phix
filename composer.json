@@ -1,6 +1,6 @@
 {
     "name": "phizio/phix",
-    "version": "1.1.6",
+    "version": "1.1.7",
     "description": "Light-weight simple framework without MVC",
     "keywords": ["framework", "phix"],
     "homepage": "http://ideasyte.ru/",
