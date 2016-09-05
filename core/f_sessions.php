@@ -1,5 +1,5 @@
 <?php
-require_once (MC_ROOT . '/vendor/alexkonov/mailer/class/mailer.php');
+//require_once (MC_ROOT . '/vendor/alexkonov/mailer/class/mailer.php');
 /* Регистрация, логин и сессии авторизации на сайте */
 
 // Функция проверки авторизации (возвращает роль пользователя, либо true - если роль не определена)
@@ -127,17 +127,8 @@ if (!empty($user_id) && !empty($user_activate)) {
                                     `name` = '$user_name',
                                     `phone` = '$user_phone',
                                     `activate_code` = '$user_activate'");
-        $mailer=new mailer($app['name'].'<'.$app['email'].'>');
-        if (isset($app['smtp']))
-            $mailer->setSMTP($app['smtp']['server'], $app['smtp']['port'], $app['smtp']['user'], $app['smtp']['password']);
-        $html=r('emails/register.html', [
-            'domain' => $app['domain'],
-            'user_id' => $user_id,
-            'user_activate' => $user_activate,
-            'user_pass' => $user_pass
-        ]);
-        $mailer->send($user_email, "Регистрация {$app['name']}", $html, MC_ROOT . '/templates/emails');
-/*
+
+
         mail(
             $user_email,
             "Регистрация {$app['name']}",
@@ -149,7 +140,7 @@ if (!empty($user_id) && !empty($user_activate)) {
             ]),
             "From: {$app['name']}<{$app['email']}>\r\nContent-type: text/html; charset=utf-8\r\n"
         );
-*/
+
         $page['success_msg'] .= "<strong>Регистрация прошла успешно!</strong><br/>На Ваш E-mail отправлено письмо cо ссылкой для активации личного кабинета";
     }
 } else if ($act == "recovery") {
@@ -177,19 +168,7 @@ if (!empty($user_id) && !empty($user_activate)) {
             $user_activate = sprintf('%04x', rand(0, 65536)) . sprintf('%04x', rand(0, 65536));
             if (db_result("UPDATE `users` SET `activate_code` = '$user_activate'
                             WHERE `id`='{$user['user_id']}'")) {
-                $mailer=new mailer($app['name'].'<'.$app['email'].'>');
-                if (isset($app['smtp']))
-                    $mailer->setSMTP($app['smtp']['server'], $app['smtp']['port'], $app['smtp']['user'], $app['smtp']['password']);
 
-                $html=r('emails/recovery.html', [
-                    'domain' => $app['domain'],
-                    'user_id' => $user_id,
-                    'user_activate' => $user_activate,
-                    'user_pass' => $user_pass
-                ]);
-
-                $mailer->send($user_email, "Восстановление доступа к {$app['name']}", $html, MC_ROOT . '/templates/emails');
-/*
                 mail(
                     $user_email,
                     "Восстановление доступа к {$app['name']}",
@@ -201,7 +180,7 @@ if (!empty($user_id) && !empty($user_activate)) {
                     ]),
                     "From: {$app['name']}<{$app['email']}>\r\nContent-type: text/html; charset=utf-8\r\n"
                 );
-*/
+
                 $page['success_msg'] .= "<strong>Письмо успешно отправлено на $user_email</strong><br />"
                     . "Проверьте свой E-mail и следуйте инструкциям для восстановления пароля";
             }
@@ -269,4 +248,3 @@ if (!empty($user_id) && !empty($user_activate)) {
             . "Проверьте правильность введенного $login, $pass логина и пароля!<br />";
 } else $log .= "Сессия пуста, не предпринимается никаких действий<br />";
 
-?>
